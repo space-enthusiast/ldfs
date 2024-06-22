@@ -4,3 +4,4 @@ plugins {
 rootProject.name = "ldfs-multi"
 include("subproject1", "subproject2")
 include("ldfs-master")
+include("ldfs-chunk")

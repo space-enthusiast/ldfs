@@ -1,10 +1,8 @@
 package ldfs.plugins
 
 import io.ktor.http.ContentType
-import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.PartData
 import io.ktor.http.content.forEachPart
-import io.ktor.http.content.readAllParts
 import io.ktor.http.content.streamProvider
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
@@ -84,9 +82,10 @@ fun Application.configureRouting() {
                     is PartData.FileItem -> {
                         println("FileItem received: ${part.name}")
                         val chunkUuid = part.name.let { UUID.fromString(it) }
-                        val file = chunkUuid?.let { uuid ->
-                            File("$cashFolder/${System.currentTimeMillis()}-$uuid")
-                        }
+                        val file =
+                            chunkUuid?.let { uuid ->
+                                File("$cashFolder/${System.currentTimeMillis()}-$uuid")
+                            }
                         file?.also {
                             part.streamProvider().use { input ->
                                 it.outputStream().buffered().use { output ->

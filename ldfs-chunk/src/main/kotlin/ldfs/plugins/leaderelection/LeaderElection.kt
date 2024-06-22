@@ -1,8 +1,7 @@
-package ldfs.plugins.LeaderElection
+package ldfs.plugins.leaderelection
 
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
-import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
@@ -14,23 +13,26 @@ import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
+import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
-import java.util.*
-import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import java.util.*
+import java.util.concurrent.atomic.AtomicInteger
 
 enum class NodeState {
-    FOLLOWER, CANDIDATE, LEADER
+    FOLLOWER,
+    CANDIDATE,
+    LEADER,
 }
 
 class Node(
     private val id: String,
     private val peers: List<ChunkServerEntity>,
-    private val client: HttpClient
+    private val client: HttpClient,
 ) {
     private var state = NodeState.FOLLOWER
     private var currentTerm = 0
@@ -47,11 +49,14 @@ class Node(
     }
 
     private fun resetElectionTimeout() {
-        electionTimer.schedule(object : TimerTask() {
-            override fun run() {
-                onElectionTimeout()
-            }
-        }, electionTimeout.toLong())
+        electionTimer.schedule(
+            object : TimerTask() {
+                override fun run() {
+                    onElectionTimeout()
+                }
+            },
+            electionTimeout.toLong(),
+        )
     }
 
     fun onElectionTimeout() {
@@ -69,10 +74,11 @@ class Node(
             peers.forEach { peer ->
                 launch {
                     try {
-                        val response: HttpResponse = client.post("http://${peer.ip}:${peer.port}/vote") {
-                            contentType(ContentType.Application.Json)
-                            setBody(voteRequest)
-                        }
+                        val response: HttpResponse =
+                            client.post("http://${peer.ip}:${peer.port}/vote") {
+                                contentType(ContentType.Application.Json)
+                                setBody(voteRequest)
+                            }
                         val voteResponse: VoteResponse = response.body()
                         handleVoteResponse(voteResponse, votesReceived)
                     } catch (e: Exception) {
@@ -83,7 +89,10 @@ class Node(
         }
     }
 
-    private fun handleVoteResponse(response: VoteResponse, votesReceived: AtomicInteger) {
+    private fun handleVoteResponse(
+        response: VoteResponse,
+        votesReceived: AtomicInteger,
+    ) {
         if (response.term > currentTerm) {
             currentTerm = response.term
             state = NodeState.FOLLOWER
@@ -99,7 +108,8 @@ class Node(
     private fun becomeLeader() {
         state = NodeState.LEADER
         peers.forEach { peer ->
-            val appendEntries = AppendEntries(currentTerm, id, log.size - 1, if (log.isNotEmpty()) log.last().term else 0, listOf(), commitIndex)
+            val appendEntries =
+                AppendEntries(currentTerm, id, log.size - 1, if (log.isNotEmpty()) log.last().term else 0, listOf(), commitIndex)
             runBlocking {
                 launch {
                     client.post("http://${peer.ip}:${peer.port}/append") {
@@ -138,14 +148,19 @@ class Node(
 }
 
 fun main() {
-    val node = Node("node1", listOf(
-        ChunkServerEntity("localhost", 8081),
-        ChunkServerEntity("localhost", 8082)
-    ), HttpClient {
-        install(io.ktor.client.plugins.contentnegotiation.ContentNegotiation) {
-            gson()
-        }
-    })
+    val node =
+        Node(
+            "node1",
+            listOf(
+                ChunkServerEntity("localhost", 8081),
+                ChunkServerEntity("localhost", 8082),
+            ),
+            HttpClient {
+                install(io.ktor.client.plugins.contentnegotiation.ContentNegotiation) {
+                    gson()
+                }
+            },
+        )
 
     embeddedServer(Netty, port = 8080) {
         install(ContentNegotiation) {
